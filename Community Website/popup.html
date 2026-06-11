@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DarkSystem Auto Approver</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <h1>DarkSystem Auto Approver</h1>
+      <p class="subtitle">
+        Scan inbox distribusi, buka detail, lalu klik <strong>Setuju</strong> untuk item yang masih menunggu.
+      </p>
+
+      <label class="field" for="delaySeconds">
+        <span>Delay antar aksi (detik)</span>
+        <input id="delaySeconds" type="number" min="1" max="10" step="1" value="2">
+      </label>
+
+      <section class="status-card">
+        <div class="status-row">
+          <span>Status</span>
+          <strong id="statusText">Memuat...</strong>
+        </div>
+        <div class="status-row">
+          <span>Total inbox ditemukan</span>
+          <strong id="queueCount">0</strong>
+        </div>
+        <div class="status-row">
+          <span>Sedang diproses</span>
+          <strong id="currentIndex">0</strong>
+        </div>
+        <div class="status-row">
+          <span>Berhasil klik Setuju</span>
+          <strong id="approvedCount">0</strong>
+        </div>
+        <div class="status-row">
+          <span>Dilewati</span>
+          <strong id="skippedCount">0</strong>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button id="startButton" class="primary">Mulai</button>
+        <button id="stopButton" class="danger">Stop</button>
+        <button id="resetButton" class="ghost">Reset</button>
+      </div>
+
+      <p id="hintText" class="hint">
+        Pastikan user sudah login ke DarkSystem. Biarkan tab tetap terbuka sampai proses selesai.
+      </p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

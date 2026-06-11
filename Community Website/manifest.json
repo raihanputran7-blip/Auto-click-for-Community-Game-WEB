@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "DarkSystem Inbox Auto Approver",
+  "version": "1.0.0",
+  "description": "Membantu membuka inbox distribusi DarkSystem dan menekan tombol Setuju secara otomatis untuk item yang masih menunggu.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://darksystem.id/*"
+  ],
+  "action": {
+    "default_title": "DarkSystem Auto Approver",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://darksystem.id/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 340px;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: #07101e;
+  color: #edf2ff;
+}
+
+.popup {
+  padding: 18px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.subtitle,
+.hint {
+  margin: 0;
+  color: #9baccc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.field {
+  display: block;
+  margin-top: 16px;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #bfd0f3;
+}
+
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #294164;
+  border-radius: 10px;
+  background: #0f1c30;
+  color: #edf2ff;
+}
+
+.status-card {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #203552;
+  border-radius: 14px;
+  background: #0d182a;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.status-row span {
+  color: #9baccc;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.primary {
+  background: #1e9d58;
+}
+
+.danger {
+  background: #b43333;
+}
+
+.ghost {
+  background: #233754;
+}
+
+.hint {
+  margin-top: 14px;
+}
