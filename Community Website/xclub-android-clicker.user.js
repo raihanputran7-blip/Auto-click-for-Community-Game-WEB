@@ -506,16 +506,21 @@
       scheduleRun(800);
     }
 
-    // SPA path watcher
+    // SPA path watcher and UI restorer
     let lastPath = window.location.pathname;
     window.setInterval(() => {
+      // Jika SPA menghapus panel kita saat pindah halaman, inject ulang
+      if (!document.getElementById(PANEL_ID) && document.body) {
+        buildPanel();
+      }
+
       if (window.location.pathname !== lastPath) {
         lastPath = window.location.pathname;
         console.log("[XCLUB] Path changed:", lastPath);
         refreshUI(readState());
         if (readState().running) scheduleRun(500);
       }
-    }, 800);
+    }, 1000);
   }
 
   // Mulai inject segera
