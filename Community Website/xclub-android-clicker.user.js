@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         XCLUB CLICKER
 // @namespace    https://xcashshop.club/
-// @version      2.2.0
+// @version      2.2.2
 // @description  Bot Android untuk auto-approve distribusi klan di XCashShop. Panel muncul di pojok kanan bawah.
 // @author       XCLUB
 // @match        https://xcashshop.club/*
 // @grant        none
-// @run-at       document-end
+// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
@@ -225,8 +225,8 @@
       launcher.style.display = "none";
     });
 
-    /* ── append ke body ── */
-    const root = document.body || document.documentElement;
+    /* ── append ke html ── */
+    const root = document.documentElement;
     root.appendChild(panel);
     root.appendChild(launcher);
 
@@ -488,15 +488,9 @@
   }
 
   /* =========================================================
-   *  BOOT — dengan retry jika body belum siap
+   *  BOOT
    * ========================================================= */
-  function tryInject() {
-    if (!document.body) {
-      // body belum siap, coba lagi dalam 200ms
-      window.setTimeout(tryInject, 200);
-      return;
-    }
-
+  function boot() {
     buildPanel();
 
     // Lanjutkan jika state masih running (setelah navigasi halaman)
@@ -510,7 +504,7 @@
     let lastPath = window.location.pathname;
     window.setInterval(() => {
       // Jika SPA menghapus panel kita saat pindah halaman, inject ulang
-      if (!document.getElementById(PANEL_ID) && document.body) {
+      if (!document.getElementById(PANEL_ID)) {
         buildPanel();
       }
 
@@ -523,7 +517,7 @@
     }, 1000);
   }
 
-  // Mulai inject segera
-  tryInject();
+  // Jalankan langsung karena @run-at document-end / document-idle
+  boot();
 
 })();
