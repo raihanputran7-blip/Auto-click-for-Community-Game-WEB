@@ -1,4 +1,4 @@
-# XCLUB CLICKER (v2.0.0)
+# XCLUB CLICKER (v2.3.0)
 
 Project ini menyediakan alat otomasi persetujuan distribusi klan pada website **XCashShop** (`https://xcashshop.club/`). Tersedia dalam 2 versi:
 
@@ -40,21 +40,77 @@ Project ini menyediakan alat otomasi persetujuan distribusi klan pada website **
 
 ## 2. Panduan Mobile (Android Userscript)
 
-### Cara Pemasangan di Android:
-1. Install **Lemur Browser** atau **Kiwi Browser** dari Google Play Store.
-2. Buka browser tersebut, cari dan install extension **Tampermonkey** dari Chrome Web Store.
-3. Salin (*copy*) seluruh isi kode dari file [xclub-android-clicker.user.js]
-4. Buka dashboard **Tampermonkey** di browser Android Anda.
-5. Buat script baru (*Create a new script*), hapus kode bawaan, lalu paste kode yang telah disalin.
-6. Simpan (*Save*) script tersebut dan pastikan statusnya aktif (Enabled).
+# 📱 Tutorial Instal XCLUB CLICKER di Android (Lemur Browser)
 
-### Cara Pakai di Android:
-1. Login ke akun XCashShop di browser Android Anda.
-2. Masuk ke halaman inbox: `https://xcashshop.club/clans/inbox`.
-3. Panel overlay **XCLUB CLICKER** akan otomatis muncul di pojok kanan bawah layar.
-4. Tekan tombol **Mulai** pada panel tersebut untuk menjalankan otomasi.
-5. Panel akan menampilkan jumlah sukses klik **Setuju** dan **Skip**.
-6. Jika semua tiket selesai diproses, layar HP akan memunculkan notifikasi `"sudah selesai"`.
+Ikuti langkah-langkah berikut sampai selesai agar script dapat berjalan dengan normal.
+
+## 1. Install aplikasi yang dibutuhkan
+
+Pastikan kamu sudah menginstall:
+
+* Lemur Browser
+* Tampermonkey
+
+## 2. Aktifkan Developer Mode di Lemur Browser
+
+**WAJIB dilakukan sebelum melanjutkan.**
+
+Masuk ke:
+**Settings → Developer Mode → Aktifkan**
+
+> **⚠️ Penting:** Jika Developer Mode tidak diaktifkan, userscript dapat gagal berjalan atau panel tidak akan muncul.
+
+## 3. Install Script XCLUB CLICKER
+
+Buka link berikut:
+
+https://clipboardnow.com/id/view-paste/?id=033d571602
+
+Kemudian:
+
+1. Copy seluruh isi script.
+2. Buka Tampermonkey.
+3. Tekan tombol **+ (Create New Script)**.
+4. Hapus seluruh isi script bawaan.
+5. Paste script yang sudah dicopy.
+6. Tekan **Save**.
+7. Pastikan status script **Enabled**.
+
+## 4. Login ke Website
+
+Login ke akun XCashShop seperti biasa.
+
+Kemudian buka halaman:
+
+https://xcashshop.club/clans/inbox
+
+Jika semua langkah sudah benar, panel **XCLUB CLICKER** akan muncul otomatis di pojok kanan bawah.
+
+---
+
+# ⚠️ Penting Dibaca
+
+* Pastikan **Developer Mode Lemur sudah aktif**.
+* Pastikan script di Tampermonkey dalam keadaan **Enabled**.
+* Pastikan kamu membuka halaman **Inbox**, bukan halaman lain.
+* Jika panel belum muncul, lakukan **Refresh** halaman satu kali.
+
+---
+
+# 📹 Perhatikan Video Tutorial
+
+Mohon **perhatikan video tutorial dengan baik** dan ikuti setiap langkahnya secara berurutan.
+
+Jangan melewatkan satu langkah pun, terutama pada proses:
+
+* Mengaktifkan Developer Mode.
+* Menambahkan script ke Tampermonkey.
+* Menyimpan script.
+* Mengaktifkan script.
+
+Kesalahan kecil pada salah satu langkah di atas dapat menyebabkan panel tidak muncul.
+
+Ikuti video sampai selesai agar proses instalasi berhasil tanpa kendala.
 
 ---
 
