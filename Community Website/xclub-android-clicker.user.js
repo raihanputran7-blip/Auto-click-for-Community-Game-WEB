@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCLUB CLICKER
 // @namespace    https://xcashshop.club/
-// @version      2.2.3
+// @version      2.3.0
 // @description  Bot Android untuk auto-approve distribusi klan di XCashShop. Panel muncul di pojok kanan bawah.
 // @author       XCLUB
 // @match        https://xcashshop.club/*
@@ -13,9 +13,20 @@
   "use strict";
 
   /* =========================================================
+   *  DEBUG LOGGER
+   * ========================================================= */
+  const DEBUG = true;
+  function debug(...args) {
+    if (DEBUG) console.log("[XCLUB]", ...args);
+  }
+
+  /* =========================================================
    *  Guard - cegah double inject
    * ========================================================= */
-  if (window.__XC_CLICKER_LOADED__) return;
+  if (window.__XC_CLICKER_LOADED__) {
+    debug("Script already loaded. Aborting.");
+    return;
+  }
   window.__XC_CLICKER_LOADED__ = true;
 
   /* =========================================================
@@ -41,6 +52,7 @@
 
   let processing   = false;
   let scheduledRun = null;
+  let domObserver  = null;
 
   /* =========================================================
    *  STATE HELPERS (localStorage)
@@ -66,13 +78,18 @@
   }
 
   /* =========================================================
-   *  UI — BUILD PANEL (semua inline style, tanpa CSS class)
+   *  UI — ENSURE PANEL & LIFECYCLE
    * ========================================================= */
-  function buildPanel() {
-    // Hapus panel lama jika ada
-    const old = document.getElementById(PANEL_ID);
-    if (old) old.remove();
+  function ensurePanel() {
+    if (document.getElementById(PANEL_ID)) {
+      return; // Panel sudah ada, tidak perlu dibuat ganda
+    }
+    
+    debug("Building panel...");
+    buildPanel();
+  }
 
+  function buildPanel() {
     /* ── wrapper utama ── */
     const panel = document.createElement("div");
     panel.id = PANEL_ID;
@@ -212,7 +229,7 @@
       touchAction:  "manipulation"
     });
 
-    /* ── event listeners ── */
+    /* ── event listeners (dijamin dipasang cuma sekali karena buildPanel dicegah ganda) ── */
     btnStart.addEventListener("click",   onStart);
     btnStop.addEventListener("click",    onStop);
     btnReset.addEventListener("click",   onReset);
@@ -225,15 +242,15 @@
       launcher.style.display = "none";
     });
 
-    /* ── append ke html ── */
-    const root = document.documentElement;
+    /* ── append ke root ── */
+    const root = document.body || document.documentElement;
     root.appendChild(panel);
     root.appendChild(launcher);
 
     /* ── render state awal ── */
     refreshUI(readState());
 
-    console.log("[XCLUB] Panel injected OK");
+    debug("Panel injected OK");
   }
 
   /* =========================================================
@@ -249,7 +266,7 @@
     const startBtn   = $("start");
     const stopBtn    = $("stop");
 
-    if (!statusEl) return; // panel belum ada
+    if (!statusEl) return; // panel belum ada / terhapus
 
     statusEl.textContent   = state.running ? "🟢 Berjalan" : "🔴 Berhenti";
     approvedEl.textContent = String(state.approved || 0);
@@ -488,36 +505,86 @@
   }
 
   /* =========================================================
-   *  BOOT
+   *  SPA LIFECYCLE (OBSERVERS)
    * ========================================================= */
-  function boot() {
-    buildPanel();
-
-    // Lanjutkan jika state masih running (setelah navigasi halaman)
-    const state = readState();
-    if (state.running) {
-      console.log("[XCLUB] Resuming bot...");
-      scheduleRun(800);
+  
+  // Fungsi yang dieksekusi tiap kali URL berubah
+  function handleRouteChange() {
+    debug("Route changed to:", window.location.pathname);
+    refreshUI(readState());
+    if (readState().running) {
+      scheduleRun(500);
     }
-
-    // SPA path watcher and UI restorer
-    let lastPath = window.location.pathname;
-    window.setInterval(() => {
-      // Jika SPA menghapus panel kita saat pindah halaman, inject ulang
-      if (!document.getElementById(PANEL_ID)) {
-        buildPanel();
-      }
-
-      if (window.location.pathname !== lastPath) {
-        lastPath = window.location.pathname;
-        console.log("[XCLUB] Path changed:", lastPath);
-        refreshUI(readState());
-        if (readState().running) scheduleRun(500);
-      }
-    }, 1000);
   }
 
-  // Jalankan langsung karena @run-at document-end / document-idle
-  boot();
+  // Mengawasi history SPA 
+  function observeRoute() {
+    // monkey-patch pushState
+    const originalPushState = history.pushState;
+    history.pushState = function(...args) {
+      const ret = originalPushState.apply(this, args);
+      handleRouteChange();
+      return ret;
+    };
+
+    // monkey-patch replaceState
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function(...args) {
+      const ret = originalReplaceState.apply(this, args);
+      handleRouteChange();
+      return ret;
+    };
+
+    // deteksi navigasi pop (tombol back)
+    window.addEventListener("popstate", handleRouteChange);
+    
+    debug("Route observer initialized");
+  }
+
+  // Mengawasi render ulang DOM oleh React/Vue (kalau panel hilang)
+  function observeDOM() {
+    if (domObserver) {
+      domObserver.disconnect();
+    }
+    
+    const rootTarget = document.body || document.documentElement;
+    if (!rootTarget) return;
+
+    domObserver = new MutationObserver(() => {
+      // Cek apakah elemen panel kita ikut terhapus saat render ulang
+      if (!document.getElementById(PANEL_ID)) {
+        debug("Panel removed by DOM mutation. Re-injecting...");
+        ensurePanel();
+      }
+    });
+
+    domObserver.observe(rootTarget, { childList: true, subtree: true });
+    debug("DOM observer initialized");
+  }
+
+  /* =========================================================
+   *  BOOTSTRAP
+   * ========================================================= */
+  function boot() {
+    debug("Booting XCLUB clicker...");
+    
+    ensurePanel();
+    observeRoute();
+    observeDOM();
+
+    // Lanjutkan jika state masih running (setelah reload fisik)
+    const state = readState();
+    if (state.running) {
+      debug("Resuming bot after fresh load...");
+      scheduleRun(800);
+    }
+  }
+
+  // Inisialisasi aman 
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 
 })();
