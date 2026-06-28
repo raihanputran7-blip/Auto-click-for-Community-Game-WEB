@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         XCLUB CLICKER
 // @namespace    https://xcashshop.club/
-// @version      2.2.2
+// @version      2.2.3
 // @description  Bot Android untuk auto-approve distribusi klan di XCashShop. Panel muncul di pojok kanan bawah.
 // @author       XCLUB
 // @match        https://xcashshop.club/*
-// @grant        none
+// @grant        GM_info
 // @run-at       document-idle
 // ==/UserScript==
 
