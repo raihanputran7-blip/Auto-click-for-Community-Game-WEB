@@ -1,22 +1,20 @@
 (function () {
-  const STORAGE_KEY = "dsAutoApproverState";
+  const STORAGE_KEY = "xcAutoApproverState";
   const DEFAULT_STATE = {
     running: false,
     queue: [],
     index: 0,
     approved: 0,
     skipped: 0,
-    delaySeconds: 2,
     lastAction: "Idle",
     lastError: "",
     startedAt: null,
-    finishedAt: null
+    finishedAt: null,
+    processed: []
   };
   const INBOX_LIST_REGEX = /^\/clans\/inbox\/?$/;
-  const INBOX_DETAIL_REGEX = /^\/clans\/inbox\/[0-9a-f-]+\/?$/i;
-  const DISTRIBUTION_REGEX = /^\/clans\/[^/]+\/distributions\/[0-9a-f-]+\/?$/i;
-  const PANEL_ID = "ds-auto-approver-panel";
-  const PANEL_STYLE_ID = "ds-auto-approver-style";
+  const INBOX_DETAIL_REGEX = /^\/clans\/inbox\/[^/]+\/?$/i;
+  const DISTRIBUTION_REGEX = /^\/clans\/[^/]+\/distributions\/[^/]+\/?$/i;
 
   let processing = false;
   let scheduledRun = null;
@@ -41,119 +39,7 @@
     const currentState = await getState();
     const nextState = { ...currentState, ...partialState };
     await setState(nextState);
-    renderPanel(nextState);
     return nextState;
-  }
-
-  function ensurePanel() {
-    if (!document.head.querySelector(`#${PANEL_STYLE_ID}`)) {
-      const style = document.createElement("style");
-      style.id = PANEL_STYLE_ID;
-      style.textContent = `
-        #${PANEL_ID} {
-          position: fixed;
-          right: 16px;
-          bottom: 16px;
-          width: 280px;
-          padding: 14px;
-          background: rgba(9, 17, 31, 0.94);
-          color: #edf2ff;
-          border: 1px solid rgba(102, 126, 234, 0.35);
-          border-radius: 14px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-          z-index: 2147483647;
-          font: 13px/1.45 "Segoe UI", Tahoma, sans-serif;
-          backdrop-filter: blur(12px);
-        }
-        #${PANEL_ID}.is-hidden {
-          display: none;
-        }
-        #${PANEL_ID} .ds-title {
-          font-size: 13px;
-          font-weight: 700;
-          margin-bottom: 10px;
-        }
-        #${PANEL_ID} .ds-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          padding: 4px 0;
-        }
-        #${PANEL_ID} .ds-label {
-          color: #9fb0d4;
-        }
-        #${PANEL_ID} .ds-value {
-          font-weight: 600;
-          text-align: right;
-        }
-        #${PANEL_ID} .ds-actions {
-          display: flex;
-          gap: 8px;
-          margin-top: 12px;
-        }
-        #${PANEL_ID} button {
-          flex: 1;
-          border: 0;
-          border-radius: 9px;
-          padding: 9px 10px;
-          cursor: pointer;
-          font-weight: 600;
-        }
-        #${PANEL_ID} .ds-stop {
-          background: #b43333;
-          color: #fff;
-        }
-        #${PANEL_ID} .ds-hide {
-          background: #223754;
-          color: #fff;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    let panel = document.getElementById(PANEL_ID);
-    if (!panel) {
-      panel = document.createElement("aside");
-      panel.id = PANEL_ID;
-      panel.innerHTML = `
-        <div class="ds-title">DarkSystem Auto Approver</div>
-        <div class="ds-row"><span class="ds-label">Status</span><span class="ds-value" data-field="status">Idle</span></div>
-        <div class="ds-row"><span class="ds-label">Queue</span><span class="ds-value" data-field="queue">0</span></div>
-        <div class="ds-row"><span class="ds-label">Posisi</span><span class="ds-value" data-field="position">0</span></div>
-        <div class="ds-row"><span class="ds-label">Setuju</span><span class="ds-value" data-field="approved">0</span></div>
-        <div class="ds-row"><span class="ds-label">Skip</span><span class="ds-value" data-field="skipped">0</span></div>
-        <div class="ds-row"><span class="ds-label">Aksi terakhir</span><span class="ds-value" data-field="action">Idle</span></div>
-        <div class="ds-actions">
-          <button class="ds-stop" type="button">Stop</button>
-          <button class="ds-hide" type="button">Sembunyikan</button>
-        </div>
-      `;
-
-      panel.querySelector(".ds-stop").addEventListener("click", () => {
-        stopAutomation("Automation dihentikan dari panel.");
-      });
-
-      panel.querySelector(".ds-hide").addEventListener("click", () => {
-        panel.classList.add("is-hidden");
-      });
-
-      document.documentElement.appendChild(panel);
-    }
-
-    return panel;
-  }
-
-  function renderPanel(state) {
-    const panel = ensurePanel();
-    const position = state.queue.length ? Math.min(state.index + 1, state.queue.length) : 0;
-
-    panel.querySelector('[data-field="status"]').textContent = state.running ? "Berjalan" : "Berhenti";
-    panel.querySelector('[data-field="queue"]').textContent = String(state.queue.length);
-    panel.querySelector('[data-field="position"]').textContent = String(position);
-    panel.querySelector('[data-field="approved"]').textContent = String(state.approved);
-    panel.querySelector('[data-field="skipped"]').textContent = String(state.skipped);
-    panel.querySelector('[data-field="action"]').textContent = state.lastError || state.lastAction || "Idle";
-    panel.classList.remove("is-hidden");
   }
 
   function scheduleRun(waitMs = 500) {
@@ -180,34 +66,6 @@
     } catch (error) {
       return "";
     }
-  }
-
-  function getActionableInboxLinks() {
-    const links = new Set();
-    const anchors = Array.from(document.querySelectorAll('a[href*="/clans/inbox/"]'));
-
-    for (const anchor of anchors) {
-      const href = anchor.getAttribute("href");
-      const absoluteUrl = normalizeUrl(href);
-      const url = absoluteUrl ? new URL(absoluteUrl) : null;
-      if (!url || !INBOX_DETAIL_REGEX.test(url.pathname)) {
-        continue;
-      }
-
-      const blockText = anchor.innerText || anchor.textContent || "";
-      const nearbyText = anchor.closest("a, article, div, li")?.innerText || "";
-      const combinedText = `${blockText} ${nearbyText}`.toLowerCase();
-
-      if (
-        combinedText.includes("sedang menunggu persetujuan") ||
-        combinedText.includes("didistribusikan") ||
-        combinedText.includes("distribution")
-      ) {
-        links.add(absoluteUrl);
-      }
-    }
-
-    return Array.from(links);
   }
 
   function findElementByText(selector, expectedText, options = {}) {
@@ -253,7 +111,7 @@
   async function waitForMatchingElement(selector, texts, options = {}) {
     const {
       attempts = 8,
-      delayMs = 700,
+      delayMs = 300,
       exact = true
     } = options;
 
@@ -280,121 +138,104 @@
     }
 
     clickElement(loadMoreButton);
-    await delay(1600);
+    await delay(1000);
     return true;
   }
 
-  async function autoScrollInboxPage() {
-    let stableRounds = 0;
-    let previousHeight = 0;
-    let previousCount = 0;
+  function isInboxPending(anchor) {
+    const text = (anchor.innerText || "").toLowerCase();
+    
+    if (!text.includes("menunggu") && !text.includes("waiting")) {
+      return false;
+    }
 
-    for (let round = 0; round < 20; round += 1) {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-      await delay(1200);
-      const clickedLoadMore = await clickLoadMoreButtonIfPresent();
+    const style = window.getComputedStyle(anchor);
+    if (parseFloat(style.opacity || "1") < 0.7) {
+      return false;
+    }
 
-      if (clickedLoadMore) {
-        await delay(1000);
-        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-        await delay(900);
+    const icon = anchor.querySelector("svg, img, i, .icon, button");
+    if (icon) {
+      const iconStyle = window.getComputedStyle(icon);
+      const color = iconStyle.color || "";
+      const opacity = parseFloat(iconStyle.opacity || "1");
+      if (opacity < 0.7) {
+        return false;
       }
 
-      const currentHeight = document.body.scrollHeight;
-      const currentCount = getActionableInboxLinks().length;
+      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
 
-      if (
-        currentHeight === previousHeight &&
-        currentCount === previousCount &&
-        !clickedLoadMore
-      ) {
-        stableRounds += 1;
-      } else {
-        stableRounds = 0;
-      }
-
-      previousHeight = currentHeight;
-      previousCount = currentCount;
-
-      if (stableRounds >= 2) {
-        break;
+        const isGrey = Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && r < 200;
+        if (isGrey) {
+          return false;
+        }
       }
     }
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    await delay(400);
-  }
-
-  async function goToNextInboxItem(extraState = {}) {
-    const state = await getState();
-    const nextIndex = state.index + 1;
-    const done = nextIndex >= state.queue.length;
-
-    const updatedState = await patchState({
-      ...extraState,
-      index: nextIndex,
-      lastError: "",
-      lastAction: done ? "Semua inbox selesai diproses." : "Lanjut ke inbox berikutnya."
-    });
-
-    if (done) {
-      await patchState({
-        running: false,
-        finishedAt: new Date().toISOString(),
-        lastAction: `Selesai. Berhasil: ${updatedState.approved}, skip: ${updatedState.skipped}.`
-      });
-      window.location.href = "https://darksystem.id/clans/inbox";
-      return;
-    }
-
-    await delay((updatedState.delaySeconds || 2) * 1000);
-    window.location.href = updatedState.queue[nextIndex];
+    return true;
   }
 
   async function scanInboxListPage() {
-    const existingState = await getState();
+    await patchState({
+      lastError: "",
+      lastAction: "Mencari inbox yang belum diproses..."
+    });
 
-    if (
-      existingState.queue.length &&
-      existingState.index < existingState.queue.length
-    ) {
+    let anchors = [];
+    for (let i = 0; i < 10; i++) {
+      anchors = Array.from(document.querySelectorAll('a[href*="/clans/inbox/"]'));
+      if (anchors.length > 0) break;
+      await delay(300);
+    }
+
+    const state = await getState();
+    const pendingInbox = anchors.find(anchor => {
+      const href = normalizeUrl(anchor.getAttribute("href"));
+      if (state.processed && state.processed.includes(href)) {
+        return false;
+      }
+      return isInboxPending(anchor);
+    });
+
+    if (pendingInbox) {
+      const href = pendingInbox.getAttribute("href");
+      const absoluteUrl = normalizeUrl(href);
+      
+      const updatedProcessed = [...(state.processed || []), absoluteUrl];
       await patchState({
-        lastError: "",
-        lastAction: "Melanjutkan queue yang sudah ada..."
+        processed: updatedProcessed,
+        lastAction: `Membuka inbox: ${pendingInbox.textContent.trim().split('\n')[0]}`
       });
-      await delay((existingState.delaySeconds || 2) * 1000);
-      window.location.href = existingState.queue[existingState.index];
+      
+      clickElement(pendingInbox);
+      
+      await delay(300);
+      if (window.location.href !== absoluteUrl) {
+        window.location.href = absoluteUrl;
+      }
+      return;
+    }
+
+    const clickedLoadMore = await clickLoadMoreButtonIfPresent();
+    if (clickedLoadMore) {
+      await patchState({
+        lastAction: "Memuat lebih banyak inbox..."
+      });
+      await delay(1200);
+      scheduleRun(300);
       return;
     }
 
     await patchState({
-      lastError: "",
-      lastAction: "Mencari semua inbox distribusi..."
+      running: false,
+      lastAction: "Semua inbox selesai diproses.",
+      finishedAt: new Date().toISOString()
     });
-
-    await autoScrollInboxPage();
-    const links = getActionableInboxLinks();
-
-    if (!links.length) {
-      await patchState({
-        running: false,
-        lastAction: "Tidak ada inbox distribusi yang ditemukan.",
-        finishedAt: new Date().toISOString()
-      });
-      return;
-    }
-
-    const nextState = await patchState({
-      queue: links,
-      index: 0,
-      approved: 0,
-      skipped: 0,
-      lastError: "",
-      lastAction: `Ditemukan ${links.length} inbox. Membuka item pertama...`
-    });
-
-    await delay((nextState.delaySeconds || 2) * 1000);
-    window.location.href = links[0];
+    alert("sudah selesai");
   }
 
   async function openDistributionFromInboxDetail() {
@@ -403,18 +244,21 @@
       lastAction: "Membuka tombol Lihat TKP..."
     });
 
-    await delay(1000);
-
-    const actionElement =
-      findElementByText('a, button, [role="button"]', "Lihat TKP", { exact: false }) ||
-      Array.from(document.querySelectorAll('a[href*="/distributions/"]')).find(Boolean);
+    let actionElement = null;
+    for (let i = 0; i < 10; i++) {
+      actionElement =
+        findElementByText('a, button, [role="button"]', "Lihat TKP", { exact: false }) ||
+        Array.from(document.querySelectorAll('a[href*="/distributions/"]')).find(Boolean);
+      if (actionElement) break;
+      await delay(200);
+    }
 
     if (!actionElement) {
-      const state = await getState();
-      await goToNextInboxItem({
-        skipped: state.skipped + 1,
-        lastAction: "Tombol Lihat TKP tidak ditemukan, item dilewati."
+      await patchState({
+        lastAction: "Tombol Lihat TKP tidak ditemukan, kembali ke inbox."
       });
+      await delay(500);
+      window.location.href = "https://xcashshop.club/clans/inbox";
       return;
     }
 
@@ -422,7 +266,6 @@
     if (href) {
       const absoluteUrl = normalizeUrl(href);
       if (absoluteUrl) {
-        await delay(400);
         window.location.href = absoluteUrl;
         return;
       }
@@ -453,9 +296,15 @@
       lastAction: "Mencari tombol Setuju..."
     });
 
-    await delay(1000);
+    let approveButton = null;
+    for (let i = 0; i < 10; i++) {
+      approveButton = findElementByText('button, a, [role="button"]', "Setuju", { exact: false });
+      if (approveButton) break;
+      await delay(200);
+    }
 
-    const approveButton = findElementByText('button, a, [role="button"]', "Setuju", { exact: false });
+    const state = await getState();
+
     if (approveButton) {
       clickElement(approveButton);
       await patchState({
@@ -467,7 +316,7 @@
         ["Konfirmasi", "Confirm", "Ya", "OK"],
         {
           attempts: 10,
-          delayMs: 800,
+          delayMs: 300,
           exact: false
         }
       );
@@ -477,49 +326,21 @@
           lastAction: "Menekan tombol Konfirmasi..."
         });
         clickElement(confirmButton);
-        await delay(1500);
+        await delay(800);
       }
 
-      await delay(800);
-      const remainingApproveButton = findElementByText('button, a, [role="button"]', "Setuju", { exact: false });
-      const statusTextAfterClick = readApprovalStatusText();
-      const state = await getState();
-
-      if (
-        confirmButton ||
-        statusTextAfterClick === "setuju" ||
-        statusTextAfterClick === "disetujui" ||
-        !remainingApproveButton
-      ) {
-        await goToNextInboxItem({
-          approved: state.approved + 1,
-          lastAction: "Setuju dan Konfirmasi berhasil diproses."
-        });
-        return;
-      }
-
-      await goToNextInboxItem({
-        skipped: state.skipped + 1,
-        lastAction: "Konfirmasi tidak muncul, item dilewati."
+      await patchState({
+        approved: (state.approved || 0) + 1,
+        lastAction: "Proses selesai, kembali ke inbox..."
       });
-      return;
-    }
-
-    const statusText = readApprovalStatusText();
-    const state = await getState();
-
-    if (statusText === "setuju" || statusText === "disetujui") {
-      await goToNextInboxItem({
-        skipped: state.skipped + 1,
-        lastAction: "Item ini sudah disetujui sebelumnya."
+    } else {
+      await patchState({
+        skipped: (state.skipped || 0) + 1,
+        lastAction: "Tombol Setuju tidak ditemukan, kembali ke inbox..."
       });
-      return;
     }
-
-    await goToNextInboxItem({
-      skipped: state.skipped + 1,
-      lastAction: "Tombol Setuju tidak ditemukan, item dilewati."
-    });
+    await delay(500);
+    window.location.href = "https://xcashshop.club/clans/inbox";
   }
 
   async function stopAutomation(reason) {
@@ -539,7 +360,6 @@
 
     try {
       const state = await getState();
-      renderPanel(state);
 
       if (!state.running) {
         processing = false;
@@ -547,20 +367,25 @@
       }
 
       const path = window.location.pathname;
+      console.log("XCLUB CLICKER: Processing page:", path);
 
       if (INBOX_LIST_REGEX.test(path)) {
+        console.log("XCLUB CLICKER: Matches Inbox List Page");
         await scanInboxListPage();
       } else if (INBOX_DETAIL_REGEX.test(path)) {
+        console.log("XCLUB CLICKER: Matches Inbox Detail Page");
         await openDistributionFromInboxDetail();
       } else if (DISTRIBUTION_REGEX.test(path)) {
+        console.log("XCLUB CLICKER: Matches Distribution Page");
         await clickApproveButton();
       } else {
+        console.log("XCLUB CLICKER: Unknown page. Redirecting to inbox...");
         await patchState({
           lastError: "",
           lastAction: "Halaman tidak sesuai. Mengarahkan ke inbox..."
         });
         await delay(700);
-        window.location.href = "https://darksystem.id/clans/inbox";
+        window.location.href = "https://xcashshop.club/clans/inbox";
       }
     } finally {
       processing = false;
@@ -572,7 +397,7 @@
       return;
     }
 
-    if (message.type === "DS_AUTO_APPROVER_START") {
+    if (message.type === "XC_CLICKER_START") {
       patchState({
         running: true,
         lastError: "",
@@ -586,16 +411,15 @@
       return true;
     }
 
-    if (message.type === "DS_AUTO_APPROVER_STOP") {
+    if (message.type === "XC_CLICKER_STOP") {
       stopAutomation("Automation dihentikan dari popup.").then(() => {
         sendResponse({ ok: true });
       });
       return true;
     }
 
-    if (message.type === "DS_AUTO_APPROVER_RESET") {
+    if (message.type === "XC_CLICKER_RESET") {
       setState(DEFAULT_STATE).then(() => {
-        renderPanel(DEFAULT_STATE);
         sendResponse({ ok: true });
       });
       return true;
@@ -604,18 +428,51 @@
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local" && changes[STORAGE_KEY]) {
-      renderPanel({ ...DEFAULT_STATE, ...changes[STORAGE_KEY].newValue });
+      const state = changes[STORAGE_KEY].newValue || {};
+      if (state.running) {
+        console.log("XCLUB CLICKER: Automation started via storage change.");
+        scheduleRun(300);
+      } else {
+        window.clearTimeout(scheduledRun);
+        console.log("XCLUB CLICKER: Automation stopped via storage change.");
+      }
     }
   });
 
+  console.log("XCLUB CLICKER: Content script initialized on", window.location.href);
+
+  // Watch for SPA path changes
+  let lastPath = window.location.pathname;
+  window.setInterval(() => {
+    if (window.location.pathname !== lastPath) {
+      lastPath = window.location.pathname;
+      console.log("XCLUB CLICKER: SPA Path changed to", lastPath);
+      getState().then((state) => {
+        if (state.running) {
+          scheduleRun(500);
+        }
+      });
+    }
+  }, 1000);
+
   getState()
     .then((state) => {
-      renderPanel(state);
-      if (state.running) {
+      const path = window.location.pathname;
+      if (INBOX_LIST_REGEX.test(path) && !state.running) {
+        patchState({
+          running: true,
+          lastError: "",
+          lastAction: "Automation auto-start terdeteksi di halaman inbox.",
+          startedAt: new Date().toISOString(),
+          finishedAt: null
+        }).then(() => {
+          scheduleRun(800);
+        });
+      } else if (state.running) {
         scheduleRun(800);
       }
     })
     .catch((error) => {
-      console.error("DarkSystem Auto Approver failed to initialize:", error);
+      console.error("XCLUB CLICKER failed to initialize:", error);
     });
 })();

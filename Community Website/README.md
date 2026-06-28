@@ -1,95 +1,63 @@
-# DarkSystem Android Auto Approver
+# XCLUB CLICKER (v2.0.0)
 
-Project ini sekarang difokuskan sebagai userscript Android untuk DarkSystem, bukan extension `Load unpacked`.
+Project ini menyediakan alat otomasi persetujuan distribusi klan pada website **XCashShop** (`https://xcashshop.club/`). Tersedia dalam 2 versi:
 
-File utama yang dipakai:
+1. **PC / Desktop**: Chrome Extension (Menggunakan kontrol popup, tanpa overlay di web).
+2. **Mobile / Android**: Userscript Tampermonkey (Menggunakan overlay panel di layar).
 
-- `darksystem-android-auto-approver.user.js`
+---
 
-Script ini akan:
+## Fitur Baru & Perubahan di v2.0.0
 
-- scan halaman `https://darksystem.id/clans/inbox`
-- auto scroll dan klik `Muat lebih banyak` bila tombolnya ada
-- buka detail inbox distribusi satu per satu
-- klik `Lihat TKP`
-- klik `Setuju`
-- lanjut klik `Konfirmasi` bila popup konfirmasi muncul
-- simpan progres sederhana di browser agar proses tetap lanjut saat pindah halaman
+- **Domain Baru**: Migrasi penuh ke domain `https://xcashshop.club/`.
+- **Auto-Start**: Bot secara otomatis mendeteksi ketika Anda membuka halaman inbox `https://xcashshop.club/clans/inbox` dan langsung memulai proses auto-click jika status bot aktif.
+- **Deteksi Cerdas (Warna & Teks)**: Bot membedakan tiket yang belum diproses (warna putih/terang & memiliki kata `"menunggu"`) dan tiket yang sudah selesai (warna abu-abu/redup). Tiket yang sudah selesai akan otomatis dilewati.
+- **Siklus Loop Cepat**: Bot memproses tiket satu per satu, menyetujuinya, lalu kembali ke halaman inbox untuk mengambil tiket berikutnya dari atas.
+- **Auto Load More**: Bot akan otomatis mengklik tombol `"Muat Lebih Banyak"` secara terus-menerus jika tidak ada tiket putih yang tersisa di layar, sampai seluruh halaman selesai dipindai.
+- **Notifikasi Selesai**: Memunculkan notifikasi pop-up `"sudah selesai"` ketika seluruh tiket dari atas hingga paling bawah telah berhasil diproses.
+- **Optimasi Kecepatan**: Waktu tunggu (*delay*) antar-aksi dipercepat secara optimal tanpa mengorbankan stabilitas.
 
-## Kenapa Diganti Jadi Userscript
+---
 
-- Di Android, import extension ZIP / folder unpacked sering tidak stabil.
-- Userscript lebih ringan dan biasanya lebih mudah dipasang di browser Android yang mendukung script manager.
-- Pendekatan yang paling masuk akal untuk Android adalah `Lemur Browser + Tampermonkey`.
+## 1. Panduan PC (Chrome Extension)
 
-Catatan:
+### Cara Pemasangan:
+1. Buka browser Google Chrome di PC.
+2. Masuk ke halaman **`chrome://extensions/`**.
+3. Aktifkan **Developer mode** di pojok kanan atas.
+4. Klik tombol **Load unpacked** di pojok kiri atas.
+5. Pilih folder project ini (tempat file `manifest.json`, `content.js`, dan `popup.html` berada).
 
-- Dukungan Lemur untuk extension dan Tampermonkey saya dasarkan pada listing Google Play Lemur Browser yang menyebut support extension dan Tampermonkey.
-- Untuk Tampermonkey, dokumentasi resminya menjelaskan bahwa userscript memang format yang didukung untuk dijalankan oleh extension tersebut.
-- Karena flow UI Android bisa berubah antar versi, langkah di bawah saya buat pakai metode yang paling aman: buat script baru lalu paste isi file `.user.js`.
+### Cara Pakai:
+1. Login ke akun XCashShop di browser Chrome Anda.
+2. Buka halaman inbox: `https://xcashshop.club/clans/inbox`.
+3. Klik ikon extension **XCLUB CLICKER** di browser untuk membuka pop-up.
+4. Klik tombol **Mulai**. Bot akan berjalan secara otomatis di tab tersebut.
+5. Layar akan memunculkan pop-up `"sudah selesai"` jika proses telah rampung.
+6. Anda bisa mengklik **Stop** kapan saja untuk menghentikan bot secara instan.
 
-## Cara Pasang di Android
+---
 
-1. Install `Lemur Browser` terlebih dulu.
-2. Buka `Lemur Browser`.
-3. Tekan ikon kotak persegi empat di menu browser.
-4. Masuk ke menu `Extension`.
-5. Cari `Tampermonkey`.
-6. Download lalu install extension `Tampermonkey`.
-7. Download atau buka file `darksystem-android-auto-approver.user.js`.
-8. Copy seluruh isi file userscript tersebut.
-9. Buka `Tampermonkey` di Lemur.
-10. Buat script baru.
-11. Hapus isi template bawaan.
-12. Paste seluruh isi `darksystem-android-auto-approver.user.js`.
-13. Save script.
-14. Pastikan script dalam keadaan aktif.
+## 2. Panduan Mobile (Android Userscript)
 
-## Cara Pakai
+### Cara Pemasangan di Android:
+1. Install **Lemur Browser** atau **Kiwi Browser** dari Google Play Store.
+2. Buka browser tersebut, cari dan install extension **Tampermonkey** dari Chrome Web Store.
+3. Salin (*copy*) seluruh isi kode dari file [xclub-android-clicker.user.js]
+4. Buka dashboard **Tampermonkey** di browser Android Anda.
+5. Buat script baru (*Create a new script*), hapus kode bawaan, lalu paste kode yang telah disalin.
+6. Simpan (*Save*) script tersebut dan pastikan statusnya aktif (Enabled).
 
-1. Login ke akun DarkSystem di Lemur.
-2. Buka website `https://darksystem.id/clans/inbox` atau halaman DarkSystem mana saja.
-3. Tunggu panel `DarkSystem Android Auto Approver` muncul di kanan bawah.
-4. Atur `Delay antar aksi` kalau perlu. Default `2` detik.
-5. Tekan `Mulai`.
-6. Biarkan tab tetap terbuka sampai semua inbox selesai diproses.
+### Cara Pakai di Android:
+1. Login ke akun XCashShop di browser Android Anda.
+2. Masuk ke halaman inbox: `https://xcashshop.club/clans/inbox`.
+3. Panel overlay **XCLUB CLICKER** akan otomatis muncul di pojok kanan bawah layar.
+4. Tekan tombol **Mulai** pada panel tersebut untuk menjalankan otomasi.
+5. Panel akan menampilkan jumlah sukses klik **Setuju** dan **Skip**.
+6. Jika semua tiket selesai diproses, layar HP akan memunculkan notifikasi `"sudah selesai"`.
 
-## Tombol Panel
-
-- `Mulai`: mulai scan inbox dan jalankan automation.
-- `Stop`: hentikan proses yang sedang berjalan.
-- `Reset`: hapus queue dan status proses sebelumnya.
-- `Sembunyikan`: menyembunyikan panel. Untuk memunculkan lagi, tekan tombol kecil `DS`.
+---
 
 ## Catatan Penting
-
-- Script ini bekerja untuk akun yang sedang login pada browser tersebut.
-- Setiap anggota tetap harus menjalankan script pada akun masing-masing bila persetujuan memang harus dilakukan per akun.
-- Jangan menutup tab saat proses sedang berjalan.
-- Kalau tampilan HTML DarkSystem berubah, selector di script mungkin perlu disesuaikan.
-- Saya belum bisa mengetes langsung ke website target dari lingkungan ini, jadi kalau nanti ada tombol yang teksnya sedikit berbeda, script masih mungkin perlu penyesuaian kecil.
-
-## File Lama
-
-Beberapa file extension lama mungkin masih ada di folder project sebagai sisa versi sebelumnya, tetapi yang dipakai sekarang untuk Android adalah:
-
-- `darksystem-android-auto-approver.user.js`
-
-## Troubleshooting
-
-### Script tidak muncul di halaman
-
-- Pastikan script di Tampermonkey sudah `Enabled`.
-- Pastikan metadata `@match` tidak diubah.
-- Coba refresh halaman DarkSystem.
-
-### Script sudah aktif tapi tidak jalan
-
-- Pastikan akun DarkSystem sudah login.
-- Tekan `Reset`, lalu `Mulai` lagi.
-- Cek apakah tombol di website masih memakai teks `Lihat TKP`, `Setuju`, `Konfirmasi`, atau `Muat lebih banyak`.
-
-### Tombol Konfirmasi tidak terklik
-
-- Bisa jadi popup konfirmasi memakai teks lain.
-- Kalau itu terjadi, kirim screenshot terbaru agar selector tombol bisa disesuaikan.
+- Jangan menutup tab browser saat bot sedang berjalan.
+- Bot mendeteksi status berdasarkan elemen visual (teks `"menunggu"` dan warna). Jika web melakukan update UI besar-besaran di kemudian hari, selector elemen di dalam script mungkin perlu disesuaikan kembali.

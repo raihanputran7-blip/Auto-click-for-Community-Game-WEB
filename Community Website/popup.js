@@ -1,4 +1,4 @@
-const STORAGE_KEY = "dsAutoApproverState";
+const STORAGE_KEY = "xcAutoApproverState";
 const DEFAULT_STATE = {
   running: false,
   queue: [],
@@ -9,16 +9,14 @@ const DEFAULT_STATE = {
   lastAction: "Idle",
   lastError: "",
   startedAt: null,
-  finishedAt: null
+  finishedAt: null,
+  processed: []
 };
 
 const statusText = document.getElementById("statusText");
-const queueCount = document.getElementById("queueCount");
-const currentIndex = document.getElementById("currentIndex");
 const approvedCount = document.getElementById("approvedCount");
 const skippedCount = document.getElementById("skippedCount");
 const hintText = document.getElementById("hintText");
-const delayInput = document.getElementById("delaySeconds");
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 const resetButton = document.getElementById("resetButton");
@@ -41,14 +39,9 @@ async function getActiveTab() {
 }
 
 function render(state) {
-  const activeNumber = state.queue.length ? Math.min(state.index + 1, state.queue.length) : 0;
-
   statusText.textContent = state.running ? "Sedang berjalan" : "Berhenti";
-  queueCount.textContent = String(state.queue.length);
-  currentIndex.textContent = String(activeNumber);
   approvedCount.textContent = String(state.approved);
   skippedCount.textContent = String(state.skipped);
-  delayInput.value = String(state.delaySeconds || 2);
 
   if (state.lastError) {
     hintText.textContent = `Terakhir: ${state.lastError}`;
@@ -74,11 +67,9 @@ async function notifyActiveTab(message) {
 }
 
 async function startAutomation() {
-  const delaySeconds = Math.max(1, Math.min(10, Number(delayInput.value) || 2));
   const nextState = {
     ...DEFAULT_STATE,
     running: true,
-    delaySeconds,
     lastAction: "Menyiapkan automation...",
     startedAt: new Date().toISOString(),
     finishedAt: null
@@ -88,19 +79,19 @@ async function startAutomation() {
   render(nextState);
 
   const tab = await getActiveTab();
-  const inboxUrl = "https://darksystem.id/clans/inbox";
+  const inboxUrl = "https://xcashshop.club/clans/inbox";
 
   if (!tab?.id) {
     hintText.textContent = "Tab aktif tidak ditemukan.";
     return;
   }
 
-  if (!tab.url || !tab.url.startsWith("https://darksystem.id/")) {
+  if (!tab.url || !tab.url.startsWith("https://xcashshop.club/")) {
     await chrome.tabs.update(tab.id, { url: inboxUrl });
     return;
   }
 
-  await notifyActiveTab({ type: "DS_AUTO_APPROVER_START" });
+  await notifyActiveTab({ type: "XC_CLICKER_START" });
 }
 
 async function stopAutomation() {
@@ -114,13 +105,13 @@ async function stopAutomation() {
 
   await setState(nextState);
   render(nextState);
-  await notifyActiveTab({ type: "DS_AUTO_APPROVER_STOP" });
+  await notifyActiveTab({ type: "XC_CLICKER_STOP" });
 }
 
 async function resetAutomation() {
   await setState(DEFAULT_STATE);
   render(DEFAULT_STATE);
-  await notifyActiveTab({ type: "DS_AUTO_APPROVER_RESET" });
+  await notifyActiveTab({ type: "XC_CLICKER_RESET" });
 }
 
 startButton.addEventListener("click", () => {
