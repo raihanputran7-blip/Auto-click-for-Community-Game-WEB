@@ -1,583 +1,478 @@
 // ==UserScript==
 // @name         XCLUB CLICKER
 // @namespace    https://xcashshop.club/
-// @version      2.0.1
-// @description  Userscript Android untuk scan inbox distribusi XCashShop lalu klik Setuju dan Konfirmasi otomatis.
-// @author       Codex
+// @version      2.1.0
+// @description  Bot Android untuk auto-approve distribusi klan di XCashShop. Panel muncul di pojok kanan bawah.
+// @author       XCLUB
 // @match        https://xcashshop.club/*
-// @grant        none
-// @run-at       document-idle
+// @grant        GM_addStyle
+// @run-at       document-end
 // ==/UserScript==
 
 (function () {
   "use strict";
 
-  if (window.__XC_ANDROID_CLICKER__) {
-    return;
-  }
-  window.__XC_ANDROID_CLICKER__ = true;
+  // Guard: cegah double inject
+  if (window.__XC_CLICKER_LOADED__) return;
+  window.__XC_CLICKER_LOADED__ = true;
 
-  const STORAGE_KEY = "xcAndroidClickerState";
-  const PANEL_ID = "xc-android-clicker-panel";
-  const LAUNCHER_ID = "xc-android-clicker-launcher";
-  const STYLE_ID = "xc-android-clicker-style";
+  /* =========================================================
+   *  CONSTANTS & STATE
+   * ========================================================= */
+  const STORAGE_KEY      = "xcAndroidClickerState";
+  const PANEL_ID         = "xc-panel";
+  const LAUNCHER_ID      = "xc-launcher";
+
+  const INBOX_LIST_REGEX  = /^\/clans\/inbox\/?$/;
+  const INBOX_DETAIL_REGEX = /^\/clans\/inbox\/[^/]+\/?$/i;
+  const DISTRIBUTION_REGEX = /^\/clans\/[^/]+\/distributions\/[^/]+\/?$/i;
+
   const DEFAULT_STATE = {
     running: false,
-    queue: [],
-    index: 0,
     approved: 0,
     skipped: 0,
-    hidden: false,
     lastAction: "Idle",
     lastError: "",
     startedAt: null,
     finishedAt: null,
     processed: []
   };
-  const INBOX_LIST_REGEX = /^\/clans\/inbox\/?$/;
-  const INBOX_DETAIL_REGEX = /^\/clans\/inbox\/[^/]+\/?$/i;
-  const DISTRIBUTION_REGEX = /^\/clans\/[^/]+\/distributions\/[^/]+\/?$/i;
 
-  let processing = false;
+  let processing   = false;
   let scheduledRun = null;
 
-  function delay(ms) {
-    return new Promise((resolve) => window.setTimeout(resolve, ms));
-  }
-
+  /* =========================================================
+   *  STATE HELPERS
+   * ========================================================= */
   function readState() {
     try {
-      const rawState = window.localStorage.getItem(STORAGE_KEY);
-      return { ...DEFAULT_STATE, ...(rawState ? JSON.parse(rawState) : {}) };
-    } catch (error) {
-      return { ...DEFAULT_STATE };
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return Object.assign({}, DEFAULT_STATE, raw ? JSON.parse(raw) : {});
+    } catch (_) {
+      return Object.assign({}, DEFAULT_STATE);
     }
   }
 
-  function writeState(nextState) {
-    const mergedState = { ...DEFAULT_STATE, ...nextState };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
-    // Only call renderPanel if DOM is ready
-    if (document.body && document.head) {
-      renderPanel(mergedState);
-    }
-    return mergedState;
+  function saveState(next) {
+    const merged = Object.assign({}, DEFAULT_STATE, next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch (_) {}
+    updatePanel(merged);
+    return merged;
   }
 
-  function patchState(partialState) {
-    return writeState({ ...readState(), ...partialState });
+  function patchState(partial) {
+    return saveState(Object.assign({}, readState(), partial));
   }
 
-  function ensureUi() {
-    if (!document.head.querySelector(`#${STYLE_ID}`)) {
-      const style = document.createElement("style");
-      style.id = STYLE_ID;
-      style.textContent = `
-        #${PANEL_ID} {
-          position: fixed;
-          right: 12px;
-          bottom: 12px;
-          width: min(320px, calc(100vw - 24px));
-          padding: 14px;
-          background: rgba(7, 16, 30, 0.96);
-          color: #edf2ff;
-          border: 1px solid rgba(54, 95, 163, 0.75);
-          border-radius: 16px;
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
-          z-index: 2147483647;
-          font: 13px/1.45 "Segoe UI", Tahoma, sans-serif;
-          backdrop-filter: blur(14px);
-        }
-        #${PANEL_ID}.is-hidden {
-          display: none;
-        }
-        #${PANEL_ID} .xc-title {
-          font-size: 14px;
-          font-weight: 700;
-          margin-bottom: 12px;
-        }
-        #${PANEL_ID} .xc-grid {
-          display: grid;
-          gap: 7px;
-        }
-        #${PANEL_ID} .xc-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        #${PANEL_ID} .xc-label {
-          color: #9fb0d4;
-        }
-        #${PANEL_ID} .xc-value {
-          font-weight: 600;
-          text-align: right;
-        }
-        #${PANEL_ID} .xc-actions {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          margin-top: 12px;
-        }
-        #${PANEL_ID} .xc-actions-secondary {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          margin-top: 8px;
-        }
-        #${PANEL_ID} button,
-        #${LAUNCHER_ID} {
-          border: 0;
-          border-radius: 10px;
-          padding: 10px 12px;
-          cursor: pointer;
-          font: inherit;
-          font-weight: 700;
-        }
-        #${PANEL_ID} .xc-start {
-          background: #1e9d58;
-          color: #fff;
-        }
-        #${PANEL_ID} .xc-stop {
-          background: #b43333;
-          color: #fff;
-        }
-        #${PANEL_ID} .xc-reset,
-        #${PANEL_ID} .xc-hide {
-          background: #223754;
-          color: #fff;
-        }
-        #${PANEL_ID} .xc-note {
-          margin-top: 10px;
-          color: #9fb0d4;
-          font-size: 12px;
-        }
-        #${LAUNCHER_ID} {
-          position: fixed;
-          right: 12px;
-          bottom: 12px;
-          z-index: 2147483646;
-          min-width: 54px;
-          background: #0f1c30;
-          color: #edf2ff;
-          border: 1px solid rgba(54, 95, 163, 0.75);
-          box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
-        }
-        #${LAUNCHER_ID}.is-hidden {
-          display: none;
-        }
-      `;
-      document.head.appendChild(style);
+  /* =========================================================
+   *  UI — INJECT PANEL
+   * ========================================================= */
+  function injectPanel() {
+    // Hapus panel lama jika ada
+    const oldPanel    = document.getElementById(PANEL_ID);
+    const oldLauncher = document.getElementById(LAUNCHER_ID);
+    if (oldPanel)    oldPanel.remove();
+    if (oldLauncher) oldLauncher.remove();
+
+    /* ── CSS ── */
+    const css = `
+      #${PANEL_ID} {
+        position: fixed !important;
+        right: 12px !important;
+        bottom: 12px !important;
+        z-index: 2147483647 !important;
+        width: min(300px, calc(100vw - 24px));
+        padding: 14px 16px;
+        background: rgba(7,16,30,0.97);
+        color: #edf2ff;
+        border: 1px solid rgba(54,95,163,0.8);
+        border-radius: 16px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+        font: 13px/1.5 -apple-system, "Segoe UI", sans-serif;
+        display: block;
+      }
+      #${PANEL_ID}.xc-hidden { display: none !important; }
+      #${PANEL_ID} .xc-title {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: .06em;
+        margin-bottom: 10px;
+        color: #6ea8fe;
+      }
+      #${PANEL_ID} .xc-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-size: 12px;
+      }
+      #${PANEL_ID} .xc-lbl { color: #8899bb; }
+      #${PANEL_ID} .xc-val { font-weight: 700; }
+      #${PANEL_ID} .xc-note {
+        font-size: 11px;
+        color: #7a8fad;
+        margin: 8px 0;
+        word-break: break-word;
+      }
+      #${PANEL_ID} .xc-btns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 10px;
+      }
+      #${PANEL_ID} button {
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 0;
+        font: 700 13px -apple-system, "Segoe UI", sans-serif;
+        cursor: pointer;
+        transition: opacity .15s;
+      }
+      #${PANEL_ID} button:active { opacity: .7; }
+      #${PANEL_ID} .btn-start  { background: #1a7f4e; color: #fff; }
+      #${PANEL_ID} .btn-stop   { background: #a02222; color: #fff; }
+      #${PANEL_ID} .btn-reset  { background: #1d3352; color: #b0c4de; }
+      #${PANEL_ID} .btn-hide   { background: #1d3352; color: #b0c4de; }
+
+      #${LAUNCHER_ID} {
+        position: fixed !important;
+        right: 12px !important;
+        bottom: 12px !important;
+        z-index: 2147483647 !important;
+        background: #0f1c30;
+        color: #6ea8fe;
+        border: 1px solid rgba(54,95,163,0.8);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font: 700 12px -apple-system, "Segoe UI", sans-serif;
+        cursor: pointer;
+        box-shadow: 0 6px 18px rgba(0,0,0,.45);
+        display: none;
+      }
+      #${LAUNCHER_ID}.xc-visible { display: block !important; }
+    `;
+
+    // Inject style — coba GM_addStyle dulu, fallback ke style element
+    try {
+      GM_addStyle(css);
+    } catch (_) {
+      const s = document.createElement("style");
+      s.textContent = css;
+      (document.head || document.documentElement).appendChild(s);
     }
 
-    let launcher = document.getElementById(LAUNCHER_ID);
-    if (!launcher) {
-      launcher = document.createElement("button");
-      launcher.id = LAUNCHER_ID;
-      launcher.type = "button";
-      launcher.textContent = "XC";
-      launcher.addEventListener("click", () => {
-        patchState({ hidden: false });
-      });
-      document.documentElement.appendChild(launcher);
-    }
+    /* ── Panel HTML ── */
+    const panel = document.createElement("div");
+    panel.id = PANEL_ID;
+    panel.innerHTML = `
+      <div class="xc-title">⚡ XCLUB CLICKER</div>
+      <div class="xc-row"><span class="xc-lbl">Status</span><span class="xc-val" id="xc-status">Berhenti</span></div>
+      <div class="xc-row"><span class="xc-lbl">Setuju</span><span class="xc-val" id="xc-approved">0</span></div>
+      <div class="xc-row"><span class="xc-lbl">Skip</span><span class="xc-val" id="xc-skipped">0</span></div>
+      <div class="xc-note" id="xc-note">Tekan Mulai untuk memulai bot.</div>
+      <div class="xc-btns">
+        <button class="btn-start" id="xc-btn-start">▶ Mulai</button>
+        <button class="btn-stop"  id="xc-btn-stop">■ Stop</button>
+      </div>
+      <div class="xc-btns" style="margin-top:6px;">
+        <button class="btn-reset" id="xc-btn-reset">↺ Reset</button>
+        <button class="btn-hide"  id="xc-btn-hide">⌃ Sembunyikan</button>
+      </div>
+    `;
 
-    let panel = document.getElementById(PANEL_ID);
-    if (!panel) {
-      panel = document.createElement("aside");
-      panel.id = PANEL_ID;
-      panel.innerHTML = `
-        <div class="xc-title">XCLUB CLICKER</div>
-        <div class="xc-grid">
-          <div class="xc-row"><span class="xc-label">Status</span><span class="xc-value" data-field="status">Berhenti</span></div>
-          <div class="xc-row"><span class="xc-label">Setuju</span><span class="xc-value" data-field="approved">0</span></div>
-          <div class="xc-row"><span class="xc-label">Skip</span><span class="xc-value" data-field="skipped">0</span></div>
-          <div class="xc-row"><span class="xc-label">Aksi</span><span class="xc-value" data-field="action">Idle</span></div>
-        </div>
+    /* ── Launcher ── */
+    const launcher = document.createElement("button");
+    launcher.id   = LAUNCHER_ID;
+    launcher.textContent = "XC";
 
-        <div class="xc-actions">
-          <button type="button" class="xc-start">Mulai</button>
-          <button type="button" class="xc-stop">Stop</button>
-        </div>
-        <div class="xc-actions-secondary">
-          <button type="button" class="xc-reset">Reset</button>
-          <button type="button" class="xc-hide">Sembunyikan</button>
-        </div>
-        <div class="xc-note">Buka xcashshop.club lalu tekan Mulai. Biarkan tab tetap terbuka sampai proses selesai.</div>
-      `;
+    /* ── Append ke body dulu, fallback ke documentElement ── */
+    const root = document.body || document.documentElement;
+    root.appendChild(panel);
+    root.appendChild(launcher);
 
-      panel.querySelector(".xc-start").addEventListener("click", () => {
-        startAutomation();
-      });
-      panel.querySelector(".xc-stop").addEventListener("click", () => {
-        stopAutomation("Automation dihentikan manual.");
-      });
-      panel.querySelector(".xc-reset").addEventListener("click", () => {
-        writeState({ ...DEFAULT_STATE, hidden: false });
-      });
-      panel.querySelector(".xc-hide").addEventListener("click", () => {
-        patchState({ hidden: true });
-      });
+    /* ── Event listeners ── */
+    document.getElementById("xc-btn-start").addEventListener("click", onStart);
+    document.getElementById("xc-btn-stop" ).addEventListener("click", onStop);
+    document.getElementById("xc-btn-reset").addEventListener("click", onReset);
+    document.getElementById("xc-btn-hide" ).addEventListener("click", () => {
+      panel.classList.add("xc-hidden");
+      launcher.classList.add("xc-visible");
+    });
+    launcher.addEventListener("click", () => {
+      panel.classList.remove("xc-hidden");
+      launcher.classList.remove("xc-visible");
+    });
 
-      document.documentElement.appendChild(panel);
-    }
-
-    return { panel, launcher };
+    /* ── Render state awal ── */
+    updatePanel(readState());
   }
 
-  function renderPanel(state = readState()) {
-    if (!document.body || !document.head) {
+  /* =========================================================
+   *  UI — UPDATE PANEL VALUES
+   * ========================================================= */
+  function updatePanel(state) {
+    const el = (id) => document.getElementById(id);
+    const statusEl   = el("xc-status");
+    const approvedEl = el("xc-approved");
+    const skippedEl  = el("xc-skipped");
+    const noteEl     = el("xc-note");
+    const startBtn   = el("xc-btn-start");
+    const stopBtn    = el("xc-btn-stop");
+
+    // Panel belum di-inject, skip
+    if (!statusEl) return;
+
+    statusEl.textContent   = state.running ? "🟢 Berjalan" : "🔴 Berhenti";
+    approvedEl.textContent = String(state.approved || 0);
+    skippedEl.textContent  = String(state.skipped  || 0);
+    noteEl.textContent     = state.lastError
+      ? "⚠ " + state.lastError
+      : state.lastAction || "Idle";
+
+    startBtn.disabled = Boolean(state.running);
+    stopBtn.disabled  = !state.running;
+    startBtn.style.opacity = state.running ? "0.4" : "1";
+    stopBtn.style.opacity  = !state.running ? "0.4" : "1";
+  }
+
+  /* =========================================================
+   *  BUTTON HANDLERS
+   * ========================================================= */
+  function onStart() {
+    // Jika bukan di halaman inbox, arahkan ke sana dulu
+    if (!INBOX_LIST_REGEX.test(window.location.pathname)) {
+      saveState(Object.assign({}, DEFAULT_STATE, {
+        running: true,
+        lastAction: "Mengarahkan ke halaman inbox...",
+        startedAt: new Date().toISOString()
+      }));
+      window.location.href = "https://xcashshop.club/clans/inbox";
       return;
     }
 
-    const { panel, launcher } = ensureUi();
-    panel.querySelector('[data-field="status"]').textContent = state.running ? "Berjalan" : "Berhenti";
-    panel.querySelector('[data-field="approved"]').textContent = String(state.approved);
-    panel.querySelector('[data-field="skipped"]').textContent = String(state.skipped);
-    panel.querySelector('[data-field="action"]').textContent = state.lastError || state.lastAction || "Idle";
-    panel.classList.toggle("is-hidden", Boolean(state.hidden));
-    launcher.classList.toggle("is-hidden", !state.hidden);
+    saveState(Object.assign({}, DEFAULT_STATE, {
+      running: true,
+      lastAction: "Bot dimulai!",
+      startedAt: new Date().toISOString()
+    }));
+    scheduleRun(600);
   }
 
-  function scheduleRun(waitMs = 500) {
+  function onStop() {
     window.clearTimeout(scheduledRun);
-    scheduledRun = window.setTimeout(() => {
-      processCurrentPage().catch((error) => {
-        handleError(error);
-      });
-    }, waitMs);
-  }
-
-  function normalizeUrl(value) {
-    try {
-      return new URL(value, window.location.origin).toString();
-    } catch (error) {
-      return "";
-    }
-  }
-
-  function findElementByText(selector, expectedText, options = {}) {
-    const { exact = true } = options;
-    const textNeedle = expectedText.trim().toLowerCase();
-    const candidates = Array.from(document.querySelectorAll(selector));
-    return candidates.find((element) => {
-      const text = (element.innerText || element.textContent || "")
-        .trim()
-        .replace(/\s+/g, " ")
-        .toLowerCase();
-      return exact ? text === textNeedle : text.includes(textNeedle);
+    patchState({
+      running: false,
+      lastAction: "Bot dihentikan manual.",
+      finishedAt: new Date().toISOString()
     });
   }
 
-  function findFirstMatchingElement(selector, texts, options = {}) {
-    for (const text of texts) {
-      const element = findElementByText(selector, text, options);
-      if (element) {
-        return element;
-      }
-    }
+  function onReset() {
+    window.clearTimeout(scheduledRun);
+    processing = false;
+    saveState(Object.assign({}, DEFAULT_STATE));
+  }
 
+  /* =========================================================
+   *  AUTOMATION HELPERS
+   * ========================================================= */
+  function delay(ms) {
+    return new Promise((res) => window.setTimeout(res, ms));
+  }
+
+  function normalizeUrl(href) {
+    try { return new URL(href, window.location.origin).href; } catch (_) { return ""; }
+  }
+
+  function findByText(selector, needle, exact) {
+    const needleLow = needle.trim().toLowerCase();
+    return Array.from(document.querySelectorAll(selector)).find((el) => {
+      const t = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ").toLowerCase();
+      return exact ? t === needleLow : t.includes(needleLow);
+    }) || null;
+  }
+
+  function findFirst(selector, needles, exact) {
+    for (const n of needles) {
+      const el = findByText(selector, n, exact);
+      if (el) return el;
+    }
     return null;
   }
 
-  function clickElement(element) {
-    element.scrollIntoView({ block: "center", behavior: "smooth" });
-    element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    element.click();
+  function tapElement(el) {
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    ["mouseover","mousedown","mouseup"].forEach((ev) =>
+      el.dispatchEvent(new MouseEvent(ev, { bubbles: true }))
+    );
+    el.click();
   }
 
-  function isDisabled(element) {
+  function isDisabled(el) {
     return Boolean(
-      element?.disabled ||
-      element?.getAttribute("aria-disabled") === "true" ||
-      element?.classList?.contains("disabled")
+      el.disabled ||
+      el.getAttribute("aria-disabled") === "true" ||
+      el.classList.contains("disabled")
     );
   }
 
-  async function waitForMatchingElement(selector, texts, options = {}) {
-    const {
-      attempts = 8,
-      delayMs = 300,
-      exact = true
-    } = options;
-
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const element = findFirstMatchingElement(selector, texts, { exact });
-      if (element) {
-        return element;
-      }
+  async function waitFor(selector, needles, tries, delayMs) {
+    for (let i = 0; i < tries; i++) {
+      const el = findFirst(selector, needles, false);
+      if (el) return el;
       await delay(delayMs);
     }
-
     return null;
-  }
-
-  async function clickLoadMoreButtonIfPresent() {
-    const loadMoreButton = findFirstMatchingElement(
-      'button, a, [role="button"]',
-      ["Muat lebih banyak", "Load more"],
-      { exact: false }
-    );
-
-    if (!loadMoreButton || isDisabled(loadMoreButton)) {
-      return false;
-    }
-
-    clickElement(loadMoreButton);
-    await delay(1000);
-    return true;
   }
 
   function isInboxPending(anchor) {
     const text = (anchor.innerText || "").toLowerCase();
-
-    if (!text.includes("menunggu") && !text.includes("waiting")) {
-      return false;
-    }
+    if (!text.includes("menunggu") && !text.includes("waiting")) return false;
 
     const style = window.getComputedStyle(anchor);
-    if (parseFloat(style.opacity || "1") < 0.7) {
-      return false;
-    }
+    if (parseFloat(style.opacity || "1") < 0.7) return false;
 
     const icon = anchor.querySelector("svg, img, i, .icon, button");
     if (icon) {
-      const iconStyle = window.getComputedStyle(icon);
-      const color = iconStyle.color || "";
-      const opacity = parseFloat(iconStyle.opacity || "1");
-      if (opacity < 0.7) {
-        return false;
-      }
-
-      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if (match) {
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-
-        const isGrey = Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && r < 200;
-        if (isGrey) {
-          return false;
-        }
+      const ic = window.getComputedStyle(icon);
+      if (parseFloat(ic.opacity || "1") < 0.7) return false;
+      const m = (ic.color || "").match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) {
+        const [r, g, b] = [+m[1], +m[2], +m[3]];
+        if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && r < 200) return false;
       }
     }
-
     return true;
   }
 
+  /* =========================================================
+   *  BOT PAGES
+   * ========================================================= */
   async function scanInboxListPage() {
-    patchState({
-      lastError: "",
-      lastAction: "Mencari inbox yang belum diproses..."
-    });
+    patchState({ lastError: "", lastAction: "Mencari inbox pending..." });
 
     let anchors = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       anchors = Array.from(document.querySelectorAll('a[href*="/clans/inbox/"]'));
       if (anchors.length > 0) break;
       await delay(300);
     }
 
     const state = readState();
-    const pendingInbox = anchors.find(anchor => {
-      const href = normalizeUrl(anchor.getAttribute("href"));
-      if (state.processed && state.processed.includes(href)) {
-        return false;
-      }
-      return isInboxPending(anchor);
+    const pending = anchors.find((a) => {
+      const href = normalizeUrl(a.getAttribute("href"));
+      if (state.processed && state.processed.includes(href)) return false;
+      return isInboxPending(a);
     });
 
-    if (pendingInbox) {
-      const href = pendingInbox.getAttribute("href");
-      const absoluteUrl = normalizeUrl(href);
-
-      const updatedProcessed = [...(state.processed || []), absoluteUrl];
+    if (pending) {
+      const href = normalizeUrl(pending.getAttribute("href"));
       patchState({
-        processed: updatedProcessed,
-        lastAction: `Membuka inbox: ${pendingInbox.textContent.trim().split('\n')[0]}`
+        processed: [...(state.processed || []), href],
+        lastAction: "Membuka inbox: " + (pending.textContent || "").trim().split("\n")[0]
       });
-
-      clickElement(pendingInbox);
-
-      await delay(300);
-      if (window.location.href !== absoluteUrl) {
-        window.location.href = absoluteUrl;
-      }
+      tapElement(pending);
+      await delay(400);
+      if (window.location.href !== href) window.location.href = href;
       return;
     }
 
-    const clickedLoadMore = await clickLoadMoreButtonIfPresent();
-    if (clickedLoadMore) {
-      patchState({
-        lastAction: "Memuat lebih banyak inbox..."
-      });
-      await delay(1200);
-      scheduleRun(300);
+    // Tidak ada pending — cari tombol Muat Lebih Banyak
+    const loadMore = findFirst('button, a, [role="button"]', ["Muat lebih banyak", "Load more"], false);
+    if (loadMore && !isDisabled(loadMore)) {
+      patchState({ lastAction: "Memuat lebih banyak inbox..." });
+      tapElement(loadMore);
+      await delay(1500);
+      scheduleRun(400);
       return;
     }
 
+    // Semua selesai
     patchState({
       running: false,
-      lastAction: "Semua inbox selesai diproses.",
+      lastAction: "Semua inbox selesai diproses!",
       finishedAt: new Date().toISOString()
     });
-    alert("sudah selesai");
+    window.setTimeout(() => alert("✅ Sudah selesai! Semua inbox telah diproses."), 300);
   }
 
   async function openDistributionFromInboxDetail() {
-    patchState({
-      lastError: "",
-      lastAction: "Membuka tombol Lihat TKP..."
-    });
+    patchState({ lastError: "", lastAction: "Mencari tombol Lihat TKP..." });
 
-    let actionElement = null;
-    for (let i = 0; i < 10; i++) {
-      actionElement =
-        findElementByText('a, button, [role="button"]', "Lihat TKP", { exact: false }) ||
-        Array.from(document.querySelectorAll('a[href*="/distributions/"]')).find(Boolean);
-      if (actionElement) break;
+    let btn = null;
+    for (let i = 0; i < 12; i++) {
+      btn = findByText('a, button, [role="button"]', "Lihat TKP", false) ||
+            Array.from(document.querySelectorAll('a[href*="/distributions/"]')).find(Boolean) || null;
+      if (btn) break;
       await delay(200);
     }
 
-    if (!actionElement) {
-      patchState({
-        lastAction: "Tombol Lihat TKP tidak ditemukan, kembali ke inbox."
-      });
+    if (!btn) {
+      patchState({ lastAction: "Lihat TKP tidak ditemukan, kembali..." });
       await delay(500);
       window.location.href = "https://xcashshop.club/clans/inbox";
       return;
     }
 
-    const href = actionElement.getAttribute("href");
+    const href = btn.getAttribute("href");
     if (href) {
-      const absoluteUrl = normalizeUrl(href);
-      if (absoluteUrl) {
-        window.location.href = absoluteUrl;
-        return;
-      }
+      const url = normalizeUrl(href);
+      if (url) { window.location.href = url; return; }
     }
-
-    clickElement(actionElement);
-  }
-
-  function readApprovalStatusText() {
-    const sections = Array.from(document.querySelectorAll("body *"));
-    for (const section of sections) {
-      const text = (section.innerText || "").trim().toLowerCase();
-      if (!text) {
-        continue;
-      }
-
-      if (text === "menunggu" || text === "setuju" || text === "disetujui" || text === "ditolak") {
-        return text;
-      }
-    }
-
-    return "";
+    tapElement(btn);
   }
 
   async function clickApproveButton() {
-    patchState({
-      lastError: "",
-      lastAction: "Mencari tombol Setuju..."
-    });
+    patchState({ lastError: "", lastAction: "Mencari tombol Setuju..." });
 
-    let approveButton = null;
-    for (let i = 0; i < 10; i++) {
-      approveButton = findElementByText('button, a, [role="button"]', "Setuju", { exact: false });
-      if (approveButton) break;
+    let approveBtn = null;
+    for (let i = 0; i < 12; i++) {
+      approveBtn = findByText('button, a, [role="button"]', "Setuju", false);
+      if (approveBtn) break;
       await delay(200);
     }
 
     const state = readState();
 
-    if (approveButton) {
-      clickElement(approveButton);
-      patchState({
-        lastAction: "Tombol Setuju diklik, menunggu Konfirmasi..."
-      });
+    if (approveBtn) {
+      tapElement(approveBtn);
+      patchState({ lastAction: "Setuju diklik, tunggu Konfirmasi..." });
 
-      const confirmButton = await waitForMatchingElement(
-        'button, a, [role="button"]',
-        ["Konfirmasi", "Confirm", "Ya", "OK"],
-        {
-          attempts: 10,
-          delayMs: 300,
-          exact: false
-        }
-      );
-
-      if (confirmButton) {
-        patchState({
-          lastAction: "Menekan tombol Konfirmasi..."
-        });
-        clickElement(confirmButton);
-        await delay(800);
+      const confirmBtn = await waitFor('button, a, [role="button"]', ["Konfirmasi","Confirm","Ya","OK"], 10, 300);
+      if (confirmBtn) {
+        patchState({ lastAction: "Menekan Konfirmasi..." });
+        tapElement(confirmBtn);
+        await delay(900);
       }
 
-      patchState({
-        approved: (state.approved || 0) + 1,
-        lastAction: "Proses selesai, kembali ke inbox..."
-      });
+      patchState({ approved: (state.approved || 0) + 1, lastAction: "Disetujui! Kembali ke inbox..." });
     } else {
-      patchState({
-        skipped: (state.skipped || 0) + 1,
-        lastAction: "Tombol Setuju tidak ditemukan, kembali ke inbox..."
-      });
+      patchState({ skipped: (state.skipped || 0) + 1, lastAction: "Setuju tidak ditemukan, skip..." });
     }
+
     await delay(500);
     window.location.href = "https://xcashshop.club/clans/inbox";
   }
 
-  function startAutomation() {
-    writeState({
-      ...DEFAULT_STATE,
-      running: true,
-      hidden: false,
-      lastAction: "Automation dimulai dari userscript.",
-      startedAt: new Date().toISOString(),
-      finishedAt: null
-    });
-
-    scheduleRun(400);
-  }
-
-  function stopAutomation(reason) {
+  /* =========================================================
+   *  SCHEDULER
+   * ========================================================= */
+  function scheduleRun(ms) {
     window.clearTimeout(scheduledRun);
-    patchState({
-      running: false,
-      lastAction: reason,
-      finishedAt: new Date().toISOString()
-    });
+    scheduledRun = window.setTimeout(() => {
+      runBot().catch((err) => {
+        patchState({ lastError: err.message, running: false, lastAction: "Error terjadi." });
+      });
+    }, ms);
   }
 
-  function handleError(error) {
-    patchState({
-      lastError: error.message,
-      lastAction: "Terjadi error.",
-      running: false,
-      finishedAt: new Date().toISOString()
-    });
-  }
-
-  async function processCurrentPage() {
-    if (processing) {
-      return;
-    }
-
+  async function runBot() {
+    if (processing) return;
     processing = true;
-
     try {
       const state = readState();
-
-      if (!state.running) {
-        processing = false;
-        return;
-      }
+      if (!state.running) { processing = false; return; }
 
       const path = window.location.pathname;
-
       if (INBOX_LIST_REGEX.test(path)) {
         await scanInboxListPage();
       } else if (INBOX_DETAIL_REGEX.test(path)) {
@@ -585,10 +480,7 @@
       } else if (DISTRIBUTION_REGEX.test(path)) {
         await clickApproveButton();
       } else {
-        patchState({
-          lastError: "",
-          lastAction: "Halaman tidak sesuai. Mengarahkan ke inbox..."
-        });
+        patchState({ lastError: "", lastAction: "Halaman tidak sesuai, redirect ke inbox..." });
         await delay(700);
         window.location.href = "https://xcashshop.club/clans/inbox";
       }
@@ -597,47 +489,39 @@
     }
   }
 
+  /* =========================================================
+   *  BOOT
+   * ========================================================= */
   function boot() {
-    console.log("XCLUB CLICKER: Userscript initialized on", window.location.href);
+    console.log("[XCLUB CLICKER] Booted on", window.location.href);
 
-    // Render panel first (always show UI)
-    try {
-      renderPanel(readState());
-    } catch (e) {
-      console.error("XCLUB CLICKER: Failed to render panel", e);
-    }
+    injectPanel();
 
+    // Lanjutkan jika state masih running (misal setelah navigasi halaman)
     const state = readState();
-
-    // Only resume if bot was already running (e.g. after a page navigation)
-    // Do NOT auto-start on fresh page load — let user press Mulai
     if (state.running) {
-      console.log("XCLUB CLICKER: Resuming automation...");
+      console.log("[XCLUB CLICKER] State running=true, resuming...");
       scheduleRun(800);
     }
 
-    // Watch for SPA path changes
+    // SPA path change watcher
     let lastPath = window.location.pathname;
     window.setInterval(() => {
       if (window.location.pathname !== lastPath) {
         lastPath = window.location.pathname;
-        console.log("XCLUB CLICKER: SPA Path changed to", lastPath);
-        try {
-          const currentState = readState();
-          renderPanel(currentState);
-          if (currentState.running) {
-            scheduleRun(500);
-          }
-        } catch (e) {
-          console.error("XCLUB CLICKER: Error on path change", e);
-        }
+        console.log("[XCLUB CLICKER] Path changed:", lastPath);
+        updatePanel(readState());
+        const s = readState();
+        if (s.running) scheduleRun(500);
       }
-    }, 1000);
+    }, 800);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot, { once: true });
-  } else {
+  // Tunggu body siap
+  if (document.body) {
     boot();
+  } else {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
   }
+
 })();
